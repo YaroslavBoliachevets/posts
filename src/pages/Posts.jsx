@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "../styles/App.css";
 
 import PostList from "../components/PostList";
@@ -15,6 +15,8 @@ import PostService from "../API/PostService";
 import Loader from "../components/UI/loader/Loader";
 
 import { getPagesCount, getPagesArray } from "../utils/pages";
+import { useObserver } from "../hooks/useObserver";
+import MySelect from "../components/UI/select/MySelect";
 
 function Posts() {
 	const [posts, setPosts] = useState([]);
@@ -25,6 +27,8 @@ function Posts() {
 	const [totalPages, setTotalPages] = useState(0);
 	const [limit, setLimit] = useState(10);
 	const [page, setPage] = useState(1);
+	// находим последний эл чтобы при его появлении подгружать новые посты (для инфинити скролла)
+	const lastElement = useRef();
 
 	let pagesArray = getPagesArray(totalPages);
 
@@ -32,9 +36,17 @@ function Posts() {
 		setPage(page);
 	};
 
-	const [fetchPosts, isPostLoading, postError] = useFetching(async () => {
+	const changeLimit = (limit) => {
+		console.log(isPostsLoading, "change limit");
+		setPosts([]);
+		setLimit(limit);
+		// при обновлении лимита страница прыгает на +1
+		setPage(0);
+	};
+
+	const [fetchPosts, isPostsLoading, postError] = useFetching(async () => {
 		const responce = await PostService.getAll(limit, page);
-		setPosts(responce.data);
+		setPosts([...posts, ...responce.data]);
 		setTotalCount(responce.headers["x-total-count"]);
 		const totalCount = responce.headers["x-total-count"];
 		setTotalPages(getPagesCount(totalCount, limit));
@@ -51,10 +63,19 @@ function Posts() {
 		setPosts(posts.filter((p) => p.id !== post.id));
 	};
 
+	useObserver(
+		lastElement,
+		page < totalPages && posts.length > 0,
+		isPostsLoading,
+		() => {
+			setPage((prev) => prev + 1);
+		},
+	);
+
 	// выполняется в начале и следит за изменением [page] в пагинации
 	useEffect(() => {
 		fetchPosts();
-	}, [page]);
+	}, [page, limit]);
 
 	return (
 		<>
@@ -66,18 +87,29 @@ function Posts() {
 
 				<hr style={{ margin: "15px 0" }} />
 				<PostFilter filter={filter} setFilter={setFilter} />
+				<MySelect
+					value={limit}
+					onChange={(value) => changeLimit(value)}
+					defaultValue={"количество постов на странице"}
+					options={[
+						{ value: 5, name: "5" },
+						{ value: 10, name: "10" },
+						{ value: 25, name: "25" },
+						{ value: -1, name: "Показать все" },
+					]}
+				/>
 
 				{postError && <h1>Произошла ошибка {postError}</h1>}
 
-				{isPostLoading ? (
-					<Loader />
-				) : (
-					<PostList
-						posts={sortedAndSearchPosts}
-						title="посты про JS"
-						remove={removePost}
-					/>
-				)}
+				<PostList
+					posts={sortedAndSearchPosts}
+					title="посты про JS"
+					remove={removePost}
+				/>
+				{/* ref={lastElement} автоматически кладет в коробку lastElement.current =  наш div
+				 */}
+				<div ref={lastElement} style={{ height: 20, background: "red" }}></div>
+				{isPostsLoading && <Loader />}
 
 				<Pagination totalPages={totalPages} changePage={changePage} page={page} />
 			</div>

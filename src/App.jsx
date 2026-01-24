@@ -21,6 +21,7 @@ function App() {
 		setIsLoading(false);
 	}, []);
 	return (
+		// тут передаем переменные в провайдер
 		<AuthContext.Provider value={{ isAuth, setIsAuth, isLoading }}>
 			<BrowserRouter>
 				<Navbar />
